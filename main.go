@@ -2,59 +2,17 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
+
+	"testik/safemap"
 )
 
+// year = 1969 — год первой высадки людей на Луну (миссия Apollo 11, 20 июля 1969 г.)
+// Источник: https://ru.wikipedia.org/wiki/Аполлон-11
 const year = 1969
 
-type SafeMap struct {
-	mu       sync.Mutex //not use sync.Map is optimized for two cases: when a key is written once but read many times, or when goroutines work with disjoint sets of keys.
-	data     map[int]int
-	accesses int
-	adds     int
-}
-
-func NewSafeMap() *SafeMap {
-	return &SafeMap{data: make(map[int]int)}
-}
-
-// Update атомарно применяет fn к текущему значению ключа.
-func (m *SafeMap) Update(key int, fn func(cur int) int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	cur, ok := m.data[key]
-	if !ok {
-		m.adds++
-	}
-	m.accesses++
-	m.data[key] = fn(cur)
-}
-
-// Get возвращает значение и факт существования ключа.
-func (m *SafeMap) Get(key int) (int, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	v, ok := m.data[key]
-	return v, ok
-}
-
-// AccessCount возвращает общее число вызовов Update.
-func (m *SafeMap) AccessCount() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.accesses
-}
-
-// AddCount возвращает число созданных ключей.
-func (m *SafeMap) AddCount() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.adds
-}
-
-// fill запускает n горутин.
-func fill(m *SafeMap, n int) {
+func fill(m *safemap.SafeMap, n int) {
 	var wg sync.WaitGroup
 	for id := range n {
 		wg.Add(1)
@@ -66,7 +24,6 @@ func fill(m *SafeMap, n int) {
 					keys = append(keys, k)
 				}
 			}
-			// Перемешиваем — доступ не должен быть последовательным.
 			rand.Shuffle(len(keys), func(i, j int) {
 				keys[i], keys[j] = keys[j], keys[i]
 			})
@@ -79,14 +36,14 @@ func fill(m *SafeMap, n int) {
 }
 
 func main() {
-	m := NewSafeMap()
+	m := safemap.New()
+
+	// Демо: 4 горутины, каждый ключ получает значение 3.
+	// Логика распределения — в тесте (safemap/safemap_test.go).
 	fill(m, 4)
 
 	val1, _ := m.Get(1)
 	valYear, _ := m.Get(year)
-	fmt.Printf("data[1]=%d data[%d]=%d | AccessCount=%d (ожид. %d) | AddCount=%d (ожид. %d)\n",
-		val1, year, valYear,
-		m.AccessCount(), year*3,
-		m.AddCount(), year,
-	)
+	fmt.Printf("data[1]=%d  data[%d]=%d  AccessCount=%d  AddCount=%d\n",
+		val1, year, valYear, m.AccessCount(), m.AddCount())
 }
